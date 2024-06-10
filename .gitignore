@@ -1,6 +1,6 @@
 # ignore downloaded model
 model/models/models.ckpt
-
+examples/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
