@@ -11,6 +11,28 @@ import scipy.sparse
 from scipy.sparse import issparse
 import scanpy as sc
 from load import *
+import os
+
+
+# Print the path of the loaded torch module
+print("PyTorch module path:", os.path.dirname(torch.__file__))
+
+# Check if CUDA is available
+cuda_available = torch.cuda.is_available()
+print("CUDA available:", cuda_available)
+
+# Print the CUDA version
+cuda_version = torch.version.cuda
+print("CUDA version:", cuda_version)
+
+# Print the PyTorch version
+torch_version = torch.__version__
+print("PyTorch version:", torch_version)
+
+
+if not torch.cuda.is_available():
+    raise EnvironmentError("CUDA is not available. Please ensure that PyTorch is installed with CUDA support.")
+
 
 ####################################Settings#################################
 parser = argparse.ArgumentParser(description='Drug_response_pre')
@@ -31,6 +53,12 @@ parser.add_argument('--ckpt_name',  type=str, default='01B-resolution', help='ch
 
 args = parser.parse_args()
 
+
+def get_cuda_info():
+  mem_alloc = "%fGB"%(torch.cuda.memory_allocated(0)/1024/1024/1024)
+  mem_reserved = "%fGB"%(torch.cuda.memory_reserved(0)/1024/1024/1024)
+  max_memory_reserved = "%fGB"%(torch.cuda.max_memory_reserved(0)/1024/1024/1024)
+  return "GPU alloc: {}. Reserved: {}. MaxReserved: {}".format(mem_alloc,mem_reserved,max_memory_reserved)
 
 
 def main_gene_selection(X_df, gene_list):
@@ -71,6 +99,7 @@ def main():
     torch.backends.cudnn.benchmark = False
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
     #Load data
     if args.data_path[-3:]=='npz':
         gexpr_feature = scipy.sparse.load_npz(args.data_path)
@@ -105,6 +134,8 @@ def main():
         gexpr_feature = gexpr_feature.iloc[:10,:]
     print(gexpr_feature.shape)
 
+    print(get_cuda_info())
+
     #Load model
     if args.version == 'noversion':
         ckpt_path = args.model_path
@@ -128,6 +159,8 @@ def main():
             raise ValueError('output_mode must be one of cell gene, gene_batch, gene_expression')
     pretrainmodel,pretrainconfig = load_model_frommmf(ckpt_path,key)
     pretrainmodel.eval()
+
+    print(get_cuda_info())
 
     geneexpemb=[]
     batchcontainer = []
@@ -183,10 +216,22 @@ def main():
             #Cell embedding
             if args.output_type=='cell':
                 position_gene_ids, _ = gatherData(data_gene_ids, value_labels, pretrainconfig['pad_token_id'])
+
+                print(get_cuda_info())
+
                 x = pretrainmodel.token_emb(torch.unsqueeze(x, 2).float(), output_weight = 0)
+                print(x.shape)
+                
+                print(get_cuda_info())
+
                 position_emb = pretrainmodel.pos_emb(position_gene_ids)
                 x += position_emb
+
+                print(get_cuda_info())
+
                 geneemb = pretrainmodel.encoder(x,x_padding)
+
+                print(get_cuda_info())
 
                 geneemb1 = geneemb[:,-1,:]
                 geneemb2 = geneemb[:,-2,:]
